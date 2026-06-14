@@ -1,0 +1,1828 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>聯邦認知與偏差行為觀測系統</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts & Font Awesome -->
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    body {
+      font-family: 'Noto Sans TC', 'Courier Prime', monospace;
+      background: #040406;
+      color: #8f9cae;
+      overflow-x: hidden;
+    }
+    
+    /* 仿 CRT 螢幕掃描線 */
+    body::before {
+      content: " ";
+      display: block;
+      position: fixed;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
+      z-index: 999;
+      background-size: 100% 4px, 6px 100%;
+      pointer-events: none;
+    }
+
+    /* 漸進式深淵背景 */
+    .abyss-bg {
+      background: radial-gradient(circle at 50% 50%, #08070d 0%, #020204 100%);
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: -2;
+    }
+
+    /* 臨床冷酷風面板 */
+    .clinical-panel {
+      background: rgba(8, 9, 16, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(79, 110, 138, 0.2);
+      box-shadow: 0 0 35px rgba(0, 0, 0, 0.9);
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* 鮮血侵蝕面板 */
+    .horror-panel {
+      background: rgba(12, 2, 2, 0.9) !important;
+      border: 1px solid rgba(220, 38, 38, 0.45) !important;
+      box-shadow: 0 0 45px rgba(220, 38, 38, 0.2) !important;
+    }
+
+    /* 螢幕劇烈搖晃 */
+    @keyframes violent-shake {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      10% { transform: translate(-8px, 6px) rotate(-1.5deg); }
+      30% { transform: translate(6px, -7px) rotate(1.5deg); }
+      50% { transform: translate(-9px, -3px) rotate(-0.5deg); }
+      70% { transform: translate(7px, 7px) rotate(2deg); }
+      90% { transform: translate(-4px, -4px) rotate(-1deg); }
+    }
+
+    .violent-shake-effect {
+      animation: violent-shake 0.38s cubic-bezier(.36,.07,.19,.97) both;
+    }
+
+    /* 故障文字效果 (Glitch) */
+    .glitch-text {
+      position: relative;
+      animation: glitch-skew 1s infinite linear alternate-reverse;
+    }
+    .glitch-text::before, .glitch-text::after {
+      content: attr(data-text);
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: #040406;
+    }
+    .glitch-text::before {
+      left: 2px;
+      text-shadow: -2px 0 #ff00c8;
+      clip: rect(44px, 450px, 56px, 0);
+      animation: glitch-anim 5s infinite linear alternate-reverse;
+    }
+    .glitch-text::after {
+      left: -2px;
+      text-shadow: -2px 0 #00e6ff, 0 2px #ff00c8;
+      clip: rect(85px, 450px, 140px, 0);
+      animation: glitch-anim2 5s infinite linear alternate-reverse;
+    }
+
+    @keyframes glitch-anim {
+      0% { clip: rect(31px, 9999px, 94px, 0); }
+      20% { clip: rect(85px, 9999px, 5px, 0); }
+      50% { clip: rect(118px, 9999px, 142px, 0); }
+      80% { clip: rect(143px, 9999px, 119px, 0); }
+      100% { clip: rect(65px, 9999px, 107px, 0); }
+    }
+    @keyframes glitch-anim2 {
+      0% { clip: rect(76px, 9999px, 116px, 0); }
+      30% { clip: rect(5px, 9999px, 63px, 0); }
+      60% { clip: rect(19px, 9999px, 127px, 0); }
+      90% { clip: rect(54px, 9999px, 120px, 0); }
+      100% { clip: rect(97px, 9999px, 35px, 0); }
+    }
+    @keyframes glitch-skew {
+      0% { transform: skew(1deg); }
+      50% { transform: skew(-2deg); }
+      100% { transform: skew(2deg); }
+    }
+
+    /* 眼睛畫布層 (永遠藏在內容後) */
+    #gaze-canvas {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 1; /* 比主體面板低 */
+      pointer-events: none;
+    }
+
+    /* 點擊血腥波紋 */
+    .blood-ripple {
+      position: absolute;
+      border-radius: 50%;
+      transform: scale(0);
+      animation: ripple-out 0.8s ease-out;
+      background-color: rgba(220, 38, 38, 0.4);
+      pointer-events: none;
+    }
+    @keyframes ripple-out {
+      to {
+        transform: scale(6);
+        opacity: 0;
+      }
+    }
+
+    /* 警報背景紅光微閃 */
+    @keyframes alarm-flash {
+      0%, 100% { background-color: rgba(0, 0, 0, 0); }
+      50% { background-color: rgba(185, 28, 28, 0.08); }
+    }
+    .alarm-active {
+      animation: alarm-flash 2s infinite;
+    }
+
+    /* 黑幕覆蓋層（過渡用） */
+    #blackout-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: black;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 1s ease;
+    }
+    
+    /* 緩慢浮現效果 */
+    .slow-reveal {
+      opacity: 0;
+      animation: slow-fade-in 5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+    }
+    @keyframes slow-fade-in {
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between relative px-4 py-6 md:p-8">
+
+  <!-- 背景、Canvas、過渡黑幕 -->
+  <div class="abyss-bg"></div>
+  <canvas id="gaze-canvas"></canvas>
+  <div id="blackout-overlay"></div>
+
+  <!-- 頂部：冷感科研儀表板 (z-index 提高以點擊) -->
+  <header class="w-full max-w-4xl mx-auto flex justify-between items-center z-10 mb-4 transition-colors duration-1000" id="game-header">
+    <div class="flex items-center space-x-3">
+      <div id="header-logo-container" class="w-10 h-10 rounded-lg bg-slate-950 flex items-center justify-center shadow-lg border border-slate-800 transition-all duration-1000">
+        <i id="header-logo" class="fa-solid fa-server text-lg text-slate-500"></i>
+      </div>
+      <div>
+        <h1 id="header-title" class="text-xs font-bold tracking-widest text-slate-400 uppercase font-mono">Cognitive Evaluation Net</h1>
+        <p id="header-subtitle" class="text-[10px] text-slate-600 font-mono">觀測協議：PROT-99011 (線上終端)</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center space-x-2">
+      <!-- 靜音與聲能開關 -->
+      <button id="sound-toggle" class="clinical-panel p-2.5 rounded hover:bg-slate-900 transition-all duration-300 flex items-center justify-center text-slate-400">
+        <i id="sound-icon" class="fa-solid fa-volume-high text-xs"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- 主控制視窗 -->
+  <main id="game-window" class="w-full max-w-4xl mx-auto flex-grow flex flex-col justify-center items-center z-10 my-auto">
+    
+    <!-- ==================== 1. 開場畫面 ==================== -->
+    <section id="start-screen" class="w-full py-8 px-6 rounded-lg clinical-panel border border-slate-900 max-w-2xl text-center">
+      
+      <!-- 娃娃眼睛 SVG 插圖 -->
+      <div class="mb-5 inline-block p-1 rounded-full bg-slate-950 border border-slate-800 shadow-2xl relative">
+        <svg viewBox="0 0 160 160" class="w-32 h-32">
+          <!-- 娃娃眼窩與陰影 -->
+          <circle cx="80" cy="80" r="76" fill="#08080c" />
+          <circle cx="80" cy="80" r="72" fill="none" stroke="#2a2235" stroke-width="3"/>
+          <path d="M 12,80 Q 80,10 148,80" stroke="#1c1c24" stroke-width="4" fill="none"/>
+          <path d="M 12,80 Q 80,150 148,80" stroke="#1c1c24" stroke-width="4" fill="none"/>
+          <!-- 娃娃眼球 - 陶瓷高亮質感 -->
+          <circle cx="80" cy="80" r="54" fill="#120e1c" stroke="#3b2d54" stroke-width="2"/>
+          <ellipse cx="80" cy="80" rx="36" ry="36" fill="#1b1230" />
+          <!-- 混濁虹膜與細紋 -->
+          <circle cx="80" cy="80" r="24" fill="#321e59" />
+          <path d="M 80,56 L 80,104 M 56,80 L 104,80 M 63,63 L 97,97 M 63,97 L 97,63" stroke="#4a2c85" stroke-width="1.5" opacity="0.6"/>
+          <!-- 瞳孔 (異常死板空洞) -->
+          <circle cx="80" cy="80" r="14" fill="#050308" />
+          <!-- 玩具反光 -->
+          <circle cx="70" cy="70" r="6" fill="#ffffff" opacity="0.8"/>
+          <circle cx="88" cy="88" r="3" fill="#ffffff" opacity="0.4"/>
+          <!-- 裂紋 - 象徵破碎的舊娃娃 -->
+          <path d="M 110,40 Q 105,55 100,60" stroke="#000" stroke-width="1.5" fill="none" opacity="0.8"/>
+          <path d="M 100,60 L 102,68" stroke="#000" stroke-width="1" fill="none" opacity="0.8"/>
+        </svg>
+      </div>
+      
+      <h2 id="start-title" class="text-xl md:text-2xl font-black tracking-widest text-slate-100 mb-3 font-mono">
+        深層認知一致性精密測量
+      </h2>
+      
+      <!-- 注意事項 & 說明 -->
+      <div id="start-notice-box" class="text-left text-xs text-slate-400 space-y-3 mb-8 bg-slate-950 p-4 rounded border border-slate-900 font-mono leading-relaxed transition-all duration-300">
+        <p>⚠️ <strong>系統授權與隱私聲明：</strong></p>
+        <p>1. 本系統為非公開認知特性測量，將即時捕捉您在多維情境下的決策潛時與微細動態反應。</p>
+        <p>2. 為了確保反饋精確度，請保持獨立空間，並將您的<strong>游標（或指尖）</strong>置於螢幕內部，不要偏離。</p>
+        <p class="text-indigo-400" id="glitch-warning-text">※ 警告：檢測中可能產生短暫感知重疊或聽覺幻覺，此屬正常生理反饋現象。</p>
+      </div>
+      
+      <div class="space-y-3 max-w-xs mx-auto">
+        <button id="btn-start" class="w-full bg-slate-950 border border-slate-800 hover:border-slate-600 hover:bg-slate-900 text-slate-200 font-bold py-3.5 px-6 rounded text-xs tracking-widest font-mono transition-all duration-300">
+          準備好了嗎？
+        </button>
+        <p class="text-[9px] text-slate-600 font-mono">SECURE PROTOCOL // AUTHORIZED LABS ONLY</p>
+      </div>
+    </section>
+
+    <!-- ==================== 2. 問卷主體 ==================== -->
+    <section id="quiz-screen" class="w-full flex flex-col gap-6 items-stretch hidden relative">
+      
+      <!-- 頂部進度條 -->
+      <div id="progress-panel" class="clinical-panel p-4 rounded-lg flex items-center justify-between border border-slate-900">
+        <div class="flex items-center space-x-3">
+          <span class="text-xs font-bold text-slate-300 bg-slate-950 px-2.5 py-1 rounded border border-slate-900 font-mono" id="quiz-counter">
+            STAGE 1/15
+          </span>
+          <span id="progress-text" class="text-xs text-slate-500 font-mono">特徵值對位中</span>
+        </div>
+        <div class="w-1/3 bg-slate-950 rounded h-1.5 overflow-hidden border border-slate-900">
+          <div id="progress-bar" class="bg-slate-700 h-full transition-all duration-700" style="width: 6.6%"></div>
+        </div>
+      </div>
+
+      <!-- 題目對話框 -->
+      <div id="question-panel" class="clinical-panel p-6 rounded-lg border border-slate-900 relative flex flex-col justify-center min-h-[140px]">
+        <div id="quest-tag" class="absolute -top-3 left-6 bg-slate-950 border border-slate-800 text-slate-300 text-[10px] font-bold font-mono px-3 py-0.5 rounded shadow">
+          ANALYSIS <span id="quest-number">01</span>
+        </div>
+        <p id="question-text" class="text-base md:text-lg font-bold leading-relaxed text-slate-200 mt-2 mb-4 font-mono">
+          加載中...
+        </p>
+        <!-- 臨床情境描述副標題 -->
+        <p id="scene-desc" class="text-xs text-slate-500 leading-relaxed font-mono italic mt-2 border-t border-slate-950/40 pt-2">
+          初始化傳輸協定...
+        </p>
+      </div>
+
+      <!-- 選項按鈕區 -->
+      <div class="grid grid-cols-1 gap-3" id="options-container">
+        <!-- JS 動態生成選項 -->
+      </div>
+    </section>
+
+    <!-- ==================== 3. 中途特別大視窗 (Q6結論、Q7警告) ==================== -->
+    <div id="overlay-screen" class="fixed inset-0 bg-black/98 z-40 flex items-center justify-center p-6 hidden">
+      <div id="overlay-box" class="clinical-panel max-w-xl w-full p-8 text-center border border-red-950 rounded-lg">
+        <h3 id="overlay-title" class="text-xl font-bold tracking-widest text-red-500 mb-4 font-mono"></h3>
+        <div id="overlay-text" class="text-slate-300 text-sm leading-relaxed font-mono"></div>
+      </div>
+    </div>
+
+    <!-- ==================== 4. 遊戲結局畫面 ==================== -->
+    <section id="result-screen" class="w-full max-w-2xl clinical-panel border border-red-950 rounded-lg p-6 md:p-8 text-center hidden">
+      <div id="result-tag" class="inline-block px-3 py-0.5 bg-red-950/20 border border-red-900/40 rounded text-[10px] font-bold tracking-widest text-red-500 mb-4 font-mono">
+        SYSTEM REPORT: TARGET ACQUIRED
+      </div>
+      <h2 id="result-main-title" class="text-xl md:text-2xl font-extrabold text-red-500 mb-2 font-mono uppercase tracking-widest">
+        已成功捕獲目標意識
+      </h2>
+      
+      <!-- 結局 CG 插畫 (慢顯) -->
+      <div class="my-5 relative py-2">
+        <h3 id="result-title" class="text-3xl md:text-4xl font-black tracking-widest text-red-600 drop-shadow-[0_0_15px_rgba(220,38,38,0.4)] font-mono glitch-text" data-text="空殼宿主">
+          空殼宿主
+        </h3>
+        
+        <div id="result-cg-wrapper" class="my-6 w-full max-w-md mx-auto aspect-[4/3] bg-black border border-red-950/30 rounded overflow-hidden shadow-2xl relative">
+          <!-- 初始為黑幕，靠 slow-reveal 類別緩慢浮現 -->
+          <div id="final-cg-image" class="w-full h-full slow-reveal">
+            <svg viewBox="0 0 400 300" class="w-full h-full">
+              <rect width="100%" height="100%" fill="#020104" />
+              <g opacity="0.85">
+                <!-- 頭部陰影 -->
+                <path d="M 200,300 C 120,300 130,160 200,160 C 270,160 280,300 200,300 Z" fill="#08050e"/>
+                <!-- 血絲背景 -->
+                <path d="M 120,110 Q 200,60 280,110" stroke="#7f1d1d" stroke-width="1.5" fill="none" opacity="0.6"/>
+                <path d="M 120,110 Q 200,160 280,110" stroke="#7f1d1d" stroke-width="1.5" fill="none" opacity="0.6"/>
+                <!-- 人類寫實巨眼 -->
+                <ellipse cx="200" cy="110" rx="75" ry="40" fill="#0c0a0f" stroke="#b91c1c" stroke-width="1.5"/>
+                <!-- 虹膜 (深邃血紅) -->
+                <circle cx="200" cy="110" r="28" fill="#1f0303" stroke="#ef4444" stroke-width="1"/>
+                <circle cx="200" cy="110" r="20" fill="#7f1d1d"/>
+                <!-- 瞳孔 -->
+                <circle cx="200" cy="110" r="10" fill="#020203" />
+                <!-- 淚水與高光 -->
+                <path d="M 200,110 L 200,155 C 200,165 204,170 198,170 C 192,170 196,165 196,155 Z" fill="#991b1b" opacity="0.9"/>
+                <circle cx="196" cy="106" r="3" fill="#fff" opacity="0.7"/>
+              </g>
+              <text x="200" y="275" fill="#5c1515" font-size="10" font-family="'Courier Prime', monospace" text-anchor="middle">THEY SEE THROUGH THE SCREEN</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- 恐怖特質剖析 -->
+      <div id="result-desc-box" class="bg-black border border-red-950 rounded p-4 mb-6 text-left font-mono">
+        <h4 class="text-xs font-bold text-red-500 mb-2 flex items-center justify-between">
+          <span><i class="fa-solid fa-skull mr-2"></i> 意識捕獲深度報告</span>
+          <span class="text-[9px] text-red-700 animate-pulse">宿主已被完全錨定</span>
+        </h4>
+        <p id="result-desc" class="text-slate-400 text-xs md:text-sm leading-relaxed">
+          你以為這只是一場測驗。但在你回答第一個問題前，你透過螢幕反射、點擊頻率所洩漏的意識波動，就已經引路。祂現在正靠在你的肩膀左側，聽著你的心跳。不要轉身。
+        </p>
+      </div>
+
+      <!-- 恐怖特質數值 -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        <div class="bg-black/80 border border-red-950 p-3 rounded">
+          <div class="text-[9px] text-slate-500 font-mono">偏執指數</div>
+          <div class="text-sm font-bold text-red-600 font-mono" id="stat-courage">★★★★★</div>
+        </div>
+        <div class="bg-black/80 border border-red-950 p-3 rounded">
+          <div class="text-[9px] text-slate-500 font-mono">防禦潰散</div>
+          <div class="text-sm font-bold text-red-600 font-mono" id="stat-wisdom">★★★★☆</div>
+        </div>
+        <div class="bg-black/80 border border-red-950 p-3 rounded">
+          <div class="text-[9px] text-slate-500 font-mono">暴露深度</div>
+          <div class="text-sm font-bold text-red-600 font-mono" id="stat-charisma">★★★★★</div>
+        </div>
+        <div class="bg-black/80 border border-red-950 p-3 rounded">
+          <div class="text-[9px] text-slate-500 font-mono">寄生程度</div>
+          <div class="text-sm font-bold text-red-600 font-mono" id="stat-mystery">★★★★★</div>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <button id="btn-restart" class="bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-500 font-bold py-3 px-6 rounded text-xs font-mono transition-all duration-300">
+          [ 重啟觀測協議 ]
+        </button>
+        <button id="btn-share" class="bg-red-950 border border-red-700 text-red-400 font-bold py-3 px-6 rounded text-xs font-mono hover:bg-red-900 hover:text-red-200 transition-all duration-300">
+          [ 擴散認知錨點 (分享) ]
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 底部：冷感資訊 -->
+  <footer class="w-full max-w-4xl mx-auto text-center text-[10px] text-slate-600 mt-6 z-10 font-mono transition-colors duration-1000" id="game-footer">
+    <p>© COGNITIVE PHENOMENON MEASUREMENT LAB. SECURE LINE.</p>
+    <p class="mt-1 text-slate-700">警告：本終端具有生物特徵同步與螢幕光源調變追蹤功能。</p>
+  </footer>
+
+  <script>
+    // ==================== 全域狀態與變數 (宣告一次) ====================
+    let currentStep = 0;
+    let scores = { courage: 0, wisdom: 0, charisma: 0, mystery: 0 };
+    let soundEnabled = true;
+    let audioCtx = null;
+    
+    // 各合成器音源與增益節點
+    let droneOsc1 = null;
+    let droneOsc2 = null;
+    let droneGain = null;
+    
+    let melodyTimer = null;
+    let breathInterval = null;
+    let soundEffectsTimer = null;
+    
+    let heartbeatInterval = null;
+    let heartbeatRate = 1200; // 毫秒/次
+    
+    let currentBgmStage = 0; // 0:靜止, 1:臨床低哼, 2:不和諧八音盒, 3:瘋狂爆發, 4:終結
+
+    /* ==================== Web Audio API 多階段環境驚悚合成器 ==================== */
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        startDrone();       // 啟動背景低哼
+        startMelodyLoop();  // 啟動旋律 loop
+        startHeartbeatLoop(); // 啟動心跳
+      }
+    }
+
+    function resumeAudio() {
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    // 1. 背景低頻哼鳴 (Drone)
+    function startDrone() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      
+      droneOsc1 = audioCtx.createOscillator();
+      droneOsc2 = audioCtx.createOscillator();
+      droneGain = audioCtx.createGain();
+      
+      droneOsc1.type = 'sine';
+      droneOsc1.frequency.setValueAtTime(55, now); // A1
+      
+      droneOsc2.type = 'sine';
+      droneOsc2.frequency.setValueAtTime(55.6, now); // 震盪不適感
+      
+      droneGain.gain.setValueAtTime(0.08, now);
+      
+      droneOsc1.connect(droneGain);
+      droneOsc2.connect(droneGain);
+      droneGain.connect(audioCtx.destination);
+      
+      droneOsc1.start();
+      droneOsc2.start();
+    }
+
+    // 隨題目階段修改背景低頻
+    function updateDroneStage(stage) {
+      if (!droneOsc1 || !droneOsc2 || !audioCtx) return;
+      const now = audioCtx.currentTime;
+      
+      if (stage === 1) {
+        droneGain.gain.exponentialRampToValueAtTime(0.08, now + 1);
+        droneOsc1.frequency.exponentialRampToValueAtTime(55, now + 1);
+      } else if (stage === 2) {
+        droneGain.gain.exponentialRampToValueAtTime(0.12, now + 2);
+        droneOsc1.frequency.exponentialRampToValueAtTime(65, now + 2); // 稍微升頻，更緊繃
+        droneOsc2.frequency.exponentialRampToValueAtTime(66.5, now + 2);
+      } else if (stage === 3) {
+        // 瘋狂期改為粗糙鋸齒波
+        droneOsc1.type = 'sawtooth';
+        droneOsc2.type = 'triangle';
+        droneGain.gain.exponentialRampToValueAtTime(0.05, now + 1);
+        droneOsc1.frequency.exponentialRampToValueAtTime(45, now + 1);
+        droneOsc2.frequency.exponentialRampToValueAtTime(46.8, now + 1);
+      } else if (stage === 4) {
+        // 結局空靈低頻
+        droneOsc1.type = 'sine';
+        droneOsc2.type = 'sine';
+        droneGain.gain.exponentialRampToValueAtTime(0.04, now + 3);
+        droneOsc1.frequency.exponentialRampToValueAtTime(50, now + 3);
+        droneOsc2.frequency.exponentialRampToValueAtTime(50.4, now + 3);
+      }
+    }
+
+    // 2. 隨機八音盒與不和諧旋律 loop
+    function startMelodyLoop() {
+      playMelodyStep();
+    }
+
+    function playMelodyStep() {
+      if (!audioCtx) return;
+      let delay = 3000;
+      const now = audioCtx.currentTime;
+      
+      if (currentBgmStage === 2) {
+        // 不和諧八音盒：在小二度或減五度不和諧音程中徘徊 (C5, C#5, F#5, G5)
+        const notes = [523.25, 554.37, 739.99, 783.99]; 
+        const freq = notes[Math.floor(Math.random() * notes.length)];
+        playPluck(freq, 0.05, 1.2, 'sine');
+        delay = Math.random() * 800 + 1200;
+      } else if (currentBgmStage === 3) {
+        // 瘋狂混亂電波
+        const notes = [1100, 1300, 900, 1600, 1800];
+        const freq = notes[Math.floor(Math.random() * notes.length)];
+        playPluck(freq, 0.03, 0.15, 'sawtooth');
+        delay = Math.random() * 200 + 150;
+      } else if (currentBgmStage === 4) {
+        // 終結：悲傷且空盤的空靈旋律 (A小調)
+        const notes = [440.00, 493.88, 523.25, 587.33, 659.25, 698.46];
+        const freq = notes[Math.floor(Math.random() * notes.length)];
+        playPluck(freq, 0.04, 2.5, 'sine');
+        delay = Math.random() * 1000 + 1800;
+      }
+      
+      melodyTimer = setTimeout(playMelodyStep, delay);
+    }
+
+    function playPluck(frequency, volume, duration, type = 'sine') {
+      if (!soundEnabled || !audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = type;
+      osc.frequency.setValueAtTime(frequency, now);
+      
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      osc.start(now);
+      osc.stop(now + duration);
+    }
+
+    // 3. 心跳聲
+    function startHeartbeatLoop() {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      heartbeatInterval = setInterval(() => {
+        playSingleHeartbeat();
+      }, heartbeatRate);
+    }
+
+    function playSingleHeartbeat() {
+      if (!soundEnabled || !audioCtx) return;
+      resumeAudio();
+      
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(50, now);
+      osc.frequency.exponentialRampToValueAtTime(10, now + 0.22);
+      
+      gain.gain.setValueAtTime(0.32, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(now + 0.22);
+
+      // 雙擊咚咚中的第二聲
+      setTimeout(() => {
+        if (!soundEnabled || !audioCtx) return;
+        const now2 = audioCtx.currentTime;
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(45, now2);
+        osc2.frequency.exponentialRampToValueAtTime(10, now2 + 0.22);
+        
+        gain2.gain.setValueAtTime(0.18, now2);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now2 + 0.22);
+        
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.start();
+        osc2.stop(now2 + 0.22);
+      }, 140);
+    }
+
+    // 4. 點擊基礎音
+    function playClickSound() {
+      if (!soundEnabled || !audioCtx) return;
+      resumeAudio();
+      
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(280, now);
+      osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+      
+      gain.gain.setValueAtTime(0.06, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(now + 0.08);
+    }
+
+    // 電波故障金屬噪音
+    function playGlitchSound() {
+      if (!soundEnabled || !audioCtx) return;
+      resumeAudio();
+      
+      const now = audioCtx.currentTime;
+      const bufferSize = audioCtx.sampleRate * 0.15; 
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      
+      const noiseNode = audioCtx.createBufferSource();
+      noiseNode.buffer = buffer;
+      
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1000, now);
+      filter.frequency.linearRampToValueAtTime(50, now + 0.15);
+      
+      const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      
+      noiseNode.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      noiseNode.start();
+    }
+
+    // Q7 BGM 大量放大
+    function playWarningSwell(duration = 4000) {
+      if (!soundEnabled || !audioCtx || !droneGain) return;
+      const now = audioCtx.currentTime;
+      
+      // 暴增低頻音量
+      droneGain.gain.linearRampToValueAtTime(0.5, now + 0.5);
+      // 過段時間衰減回正常
+      setTimeout(() => {
+        if (droneGain) {
+          droneGain.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 1.5);
+        }
+      }, duration - 1500);
+    }
+
+    // Q8-Q10 奇妙背景環境聲物理合成
+    function playWeirdSound(type) {
+      if (!soundEnabled || !audioCtx) return;
+      resumeAudio();
+      const now = audioCtx.currentTime;
+
+      if (type === 'whisper') {
+        const osc = audioCtx.createOscillator();
+        const modulator = audioCtx.createOscillator();
+        const modGain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        const mainGain = audioCtx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(120, now);
+        
+        modulator.frequency.setValueAtTime(8, now); // 抖動感
+        modGain.gain.setValueAtTime(15, now);
+
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(450, now);
+
+        mainGain.gain.setValueAtTime(0.05, now);
+        mainGain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+        modulator.connect(modGain);
+        modGain.connect(osc.frequency);
+        osc.connect(filter);
+        filter.connect(mainGain);
+        mainGain.connect(audioCtx.destination);
+
+        modulator.start();
+        osc.start();
+        modulator.stop(now + 1.5);
+        osc.stop(now + 1.5);
+
+      } else if (type === 'rat') {
+        for (let i = 0; i < 4; i++) {
+          const t = now + (i * 0.15);
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(4000, t);
+          osc.frequency.exponentialRampToValueAtTime(7500, t + 0.08);
+          
+          gain.gain.setValueAtTime(0.02, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+          
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          
+          osc.start(t);
+          osc.stop(t + 0.08);
+        }
+
+      } else if (type === 'chop') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(90, now);
+        osc.frequency.exponentialRampToValueAtTime(15, now + 0.4);
+        
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(now + 0.4);
+
+      } else if (type === 'giggle') {
+        const osc = audioCtx.createOscillator();
+        const lfo = audioCtx.createOscillator();
+        const lfoGain = audioCtx.createGain();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(900, now);
+
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(16, now); // 高速顫抖
+
+        lfoGain.gain.setValueAtTime(250, now);
+
+        gain.gain.setValueAtTime(0.03, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        lfo.start();
+        osc.start();
+        lfo.stop(now + 1.2);
+        osc.stop(now + 1.2);
+
+      } else if (type === 'water') {
+        for (let i = 0; i < 6; i++) {
+          const t = now + (i * 0.25);
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(1200 + (Math.random() * 400), t);
+          osc.frequency.exponentialRampToValueAtTime(200, t + 0.12);
+          
+          gain.gain.setValueAtTime(0.02, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+          
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          
+          osc.start(t);
+          osc.stop(t + 0.12);
+        }
+      }
+    }
+
+    // Q12-Q15 喘氣聲與沉重呼吸 (噪聲包絡調變)
+    function startBreathingLoop() {
+      if (breathInterval) clearInterval(breathInterval);
+      
+      const playBreath = () => {
+        if (!soundEnabled || !audioCtx) return;
+        const now = audioCtx.currentTime;
+        
+        const oscIn = audioCtx.createOscillator();
+        const gainIn = audioCtx.createGain();
+        oscIn.type = 'triangle';
+        oscIn.frequency.setValueAtTime(120, now);
+        oscIn.frequency.exponentialRampToValueAtTime(160, now + 1.0);
+        gainIn.gain.setValueAtTime(0.001, now);
+        gainIn.gain.linearRampToValueAtTime(0.06, now + 0.8);
+        gainIn.gain.exponentialRampToValueAtTime(0.001, now + 1.3);
+        
+        oscIn.connect(gainIn);
+        gainIn.connect(audioCtx.destination);
+        oscIn.start(now);
+        oscIn.stop(now + 1.3);
+
+        setTimeout(() => {
+          if (!soundEnabled || !audioCtx) return;
+          const nowOut = audioCtx.currentTime;
+          const oscOut = audioCtx.createOscillator();
+          const gainOut = audioCtx.createGain();
+          oscOut.type = 'sine';
+          oscOut.frequency.setValueAtTime(95, nowOut);
+          oscOut.frequency.linearRampToValueAtTime(60, nowOut + 1.2);
+          gainOut.gain.setValueAtTime(0.001, nowOut);
+          gainOut.gain.linearRampToValueAtTime(0.08, nowOut + 0.4);
+          gainOut.gain.exponentialRampToValueAtTime(0.001, nowOut + 1.6);
+          
+          oscOut.connect(gainOut);
+          gainOut.connect(audioCtx.destination);
+          oscOut.start(nowOut);
+          oscOut.stop(nowOut + 1.6);
+        }, 1400);
+      };
+
+      playBreath();
+      breathInterval = setInterval(playBreath, 3500); // 3.5秒呼吸一次
+    }
+
+    // 6. 結局高潮音效巨浪 (Swell)
+    function playClimaxSwell(callback) {
+      if (!audioCtx) {
+        callback();
+        return;
+      }
+      resumeAudio();
+      const now = audioCtx.currentTime;
+      
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      if (breathInterval) clearInterval(breathInterval);
+      if (soundEffectsTimer) clearTimeout(soundEffectsTimer);
+      if (droneOsc1) {
+        try { droneOsc1.stop(); } catch(e){}
+      }
+      if (droneOsc2) {
+        try { droneOsc2.stop(); } catch(e){}
+      }
+      
+      const duration = 3.5;
+      const sweepOsc = audioCtx.createOscillator();
+      const sweepOsc2 = audioCtx.createOscillator();
+      const sweepGain = audioCtx.createGain();
+      
+      sweepOsc.type = 'sawtooth';
+      sweepOsc.frequency.setValueAtTime(80, now);
+      sweepOsc.frequency.exponentialRampToValueAtTime(1600, now + duration);
+      
+      sweepOsc2.type = 'triangle';
+      sweepOsc2.frequency.setValueAtTime(82, now);
+      sweepOsc2.frequency.exponentialRampToValueAtTime(1580, now + duration);
+      
+      sweepGain.gain.setValueAtTime(0.02, now);
+      sweepGain.gain.linearRampToValueAtTime(0.3, now + duration);
+      
+      sweepOsc.connect(sweepGain);
+      sweepOsc2.connect(sweepGain);
+      sweepGain.connect(audioCtx.destination);
+      
+      sweepOsc.start();
+      sweepOsc2.start();
+      sweepOsc.stop(now + duration);
+      sweepOsc2.stop(now + duration);
+      
+      setTimeout(() => {
+        // 耳鳴
+        const ringOsc = audioCtx.createOscillator();
+        const ringGain = audioCtx.createGain();
+        ringOsc.type = 'sine';
+        ringOsc.frequency.setValueAtTime(4500, audioCtx.currentTime);
+        ringGain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        ringGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+        
+        ringOsc.connect(ringGain);
+        ringGain.connect(audioCtx.destination);
+        ringOsc.start();
+        ringOsc.stop(audioCtx.currentTime + 1.5);
+        
+        callback();
+      }, duration * 1000);
+    }
+
+    // 音效切換開關
+    const soundToggle = document.getElementById('sound-toggle');
+    const soundIcon = document.getElementById('sound-icon');
+    soundToggle.addEventListener('click', (e) => {
+      soundEnabled = !soundEnabled;
+      playClickSound();
+      if (soundEnabled) {
+        soundIcon.className = 'fa-solid fa-volume-high text-xs';
+      } else {
+        soundIcon.className = 'fa-solid fa-volume-xmark text-xs';
+      }
+    });
+
+    /* ==================== HTML5 Canvas: 寫實人眼追蹤與狀態機 ==================== */
+    const canvas = document.getElementById('gaze-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    let mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    let eyeOpacity = 0;           // 眼球顯現度：0 ~ 1
+    let eyeState = 'none';        // 'none', 'normal' (跟隨游標), 'tired' (疲倦直視), 'bloodshot' (猩紅直視), 'blinking' (跟隨並眨眼)
+    let isEyeBlinkingNow = false;  // 眨眼動畫觸發器
+    let blinkTimeline = 0;
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    window.addEventListener('mousemove', (e) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    });
+
+    // 隨機眨眼觸發 loop
+    setInterval(() => {
+      if (eyeState === 'blinking' && !isEyeBlinkingNow && Math.random() < 0.3) {
+        triggerBlink();
+      }
+    }, 1800);
+
+    function triggerBlink() {
+      isEyeBlinkingNow = true;
+      blinkTimeline = 0;
+    }
+
+    // 繪製單個高度寫實的人類眼球
+    function drawHumanEye(cx, cy, baseSize, opacityVal, leftEye = true) {
+      if (opacityVal <= 0) return;
+
+      ctx.save();
+      ctx.globalAlpha = opacityVal;
+
+      let isCrazy = (eyeState === 'bloodshot' || eyeState === 'blinking');
+      let isTired = (eyeState === 'tired');
+
+      let eyeWidth = baseSize * 2.1;
+      let eyeHeight = isTired ? baseSize * 0.45 : (isCrazy ? baseSize * 1.3 : baseSize * 0.85);
+
+      // 若在眨眼動畫中，利用 blinkTimeline 快速縮小眼高
+      if (isEyeBlinkingNow) {
+        blinkTimeline += 0.12;
+        let scale = Math.sin(blinkTimeline * Math.PI); // 0 -> 1 -> 0
+        if (blinkTimeline >= 1.0) {
+          isEyeBlinkingNow = false;
+          scale = 0;
+        }
+        eyeHeight = eyeHeight * (1 - scale * 0.95); // 極速閉眼
+      }
+
+      // 1. 眼眶
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, eyeWidth, eyeHeight, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#06060a';
+      ctx.strokeStyle = isCrazy ? '#991b1b' : '#1e293b';
+      ctx.lineWidth = isCrazy ? 2.5 : 1.2;
+      ctx.fill();
+      ctx.stroke();
+
+      // 2. 繪製寫實血絲 (猩紅狀態時大幅增加)
+      const bloodLineCount = isCrazy ? 22 : (isTired ? 10 : 3);
+      ctx.strokeStyle = isCrazy ? 'rgba(185, 28, 28, 0.9)' : 'rgba(139, 92, 246, 0.2)';
+      ctx.lineWidth = isCrazy ? 1.4 : 0.7;
+      
+      for (let i = 0; i < bloodLineCount; i++) {
+        ctx.beginPath();
+        const angle = (i / bloodLineCount) * Math.PI * 2 + (Math.random() * 0.2);
+        const startR = eyeWidth * (0.6 + Math.random() * 0.35);
+        const endR = baseSize * (0.3 + Math.random() * 0.2);
+        
+        const sx = cx + Math.cos(angle) * startR;
+        const sy = cy + Math.sin(angle) * startR * (eyeHeight / eyeWidth);
+        const ex = cx + Math.cos(angle) * endR;
+        const ey = cy + Math.sin(angle) * endR * (eyeHeight / eyeWidth);
+        
+        ctx.moveTo(sx, sy);
+        const midX = (sx + ex) / 2 + (Math.random() - 0.5) * 8;
+        const midY = (sy + ey) / 2 + (Math.random() - 0.5) * 6;
+        ctx.quadraticCurveTo(midX, midY, ex, ey);
+        ctx.stroke();
+      }
+
+      // 3. 視線計算 (tired、bloodshot 固定看著前方螢幕)
+      let offsetX = 0;
+      let offsetY = 0;
+      
+      if (eyeState === 'normal' || eyeState === 'blinking') {
+        const dx = mouse.x - cx;
+        const dy = mouse.y - cy;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const maxOffsetLimit = baseSize * 0.45;
+        const angle = Math.atan2(dy, dx);
+        offsetX = Math.cos(angle) * Math.min(distance * 0.12, maxOffsetLimit);
+        offsetY = Math.sin(angle) * Math.min(distance * 0.12, maxOffsetLimit) * (eyeHeight / eyeWidth);
+      }
+
+      // 4. 虹膜
+      const irisRadius = baseSize * 0.55;
+      ctx.beginPath();
+      ctx.arc(cx + offsetX, cy + offsetY, irisRadius, 0, Math.PI * 2);
+      
+      const grad = ctx.createRadialGradient(
+        cx + offsetX - (irisRadius * 0.2), cy + offsetY - (irisRadius * 0.2), 2, 
+        cx + offsetX, cy + offsetY, irisRadius
+      );
+      
+      if (isCrazy) {
+        grad.addColorStop(0, '#f59e0b');
+        grad.addColorStop(0.4, '#b91c1c');
+        grad.addColorStop(1, '#050101');
+      } else if (isTired) {
+        grad.addColorStop(0, '#5f4955');
+        grad.addColorStop(0.7, '#241a22');
+        grad.addColorStop(1, '#020204');
+      } else {
+        grad.addColorStop(0, '#475569');
+        grad.addColorStop(0.7, '#111827');
+        grad.addColorStop(1, '#020204');
+      }
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // 5. 瞳孔
+      let pupilRadius = baseSize * 0.24;
+      if (isCrazy) {
+        const tremor = Math.sin(Date.now() * 0.1) * 1.5;
+        pupilRadius = Math.max(3.0, baseSize * 0.12 + tremor);
+      } else if (isTired) {
+        pupilRadius = baseSize * 0.28; // 渙散
+      }
+      
+      ctx.beginPath();
+      ctx.arc(cx + offsetX, cy + offsetY, pupilRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#010102';
+      ctx.fill();
+
+      // 6. 反光
+      ctx.beginPath();
+      ctx.arc(cx + offsetX - (pupilRadius * 0.4), cy + offsetY - (pupilRadius * 0.4), pupilRadius * 0.3, 0, Math.PI * 2);
+      ctx.fillStyle = isCrazy ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.25)';
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // 主渲染循環
+    function drawScene() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const eyeSize = 46;
+      const eyeSpacing = 95;
+
+      // 抖動機制 (猩紅、瘋狂期偶爾抽搐)
+      let jitterX = 0;
+      let jitterY = 0;
+      if (eyeState === 'bloodshot' || eyeState === 'blinking') {
+        if (Math.random() < 0.05) {
+          jitterX = (Math.random() - 0.5) * 4;
+          jitterY = (Math.random() - 0.5) * 4;
+        }
+      }
+
+      drawHumanEye(centerX - eyeSpacing + jitterX, centerY + jitterY, eyeSize, eyeOpacity, true);
+      drawHumanEye(centerX + eyeSpacing + jitterX, centerY + jitterY, eyeSize, eyeOpacity, false);
+
+      requestAnimationFrame(drawScene);
+    }
+    drawScene();
+
+    /* ==================== 15 階心理學驚悚深度劇本數據 ==================== */
+    const quizData = [
+      {
+        question: "1. 當您踏入完全黑暗、密閉的陌生測試空間時，您的自律神經系統直覺產生的第一個生理訊號往往是？",
+        scene: "「第一階段：本能基底觀測。系統將進行無威脅基底核同步定位。」",
+        options: [
+          { type: "wisdom", text: "A. 呼吸頻率微幅自主增加，尋找對流空氣" },
+          { type: "courage", text: "B. 骨骼肌群緊繃，肢體維持防禦性靜止" },
+          { type: "charisma", text: "C. 口腔乾燥，喉頭自主產生吞嚥感" },
+          { type: "mystery", text: "D. 掌心產生不易察覺的冰冷微汗" }
+        ]
+      },
+      {
+        question: "2. 如果此刻，您後方深邃的陰影中，響起三聲短促而粗糙的「指甲刮擦木門」聲。此時您腦海第一個閃過的思維是？",
+        scene: "「第二階段：安全感瓦解測試。背景偵測程序初始化。」",
+        options: [
+          { type: "wisdom", text: "A. 這大機率是周圍房屋熱脹冷縮的聲學現象" },
+          { type: "courage", text: "B. 是門外的風聲，只要轉向確認就能解決" },
+          { type: "charisma", text: "C. 是某隻微型齧齒動物在尋找隱蔽路徑" },
+          { type: "mystery", text: "D. 那聲音是直接在我的大腦骨骼內部迴盪的" }
+        ]
+      },
+      {
+        question: "3. ⚠️警告：本端檢測到您的生理特徵發生了 1.2% 的離散偏差。請仔細回想，您上一餐進食的食物中，是否存在一種微弱的、帶有黏稠土腥味的生鐵鏽甘甜？",
+        scene: "「第三階段：生體化學偏差修正。請務必高度專注。」",
+        options: [
+          { type: "wisdom", text: "A. 完全沒有，我的飲食清單一向處於安全可控狀態" },
+          { type: "courage", text: "B. 這只是系統調頻產生的主觀心理暗示" },
+          { type: "charisma", text: "C. 有一瞬間感受到，但只是口部微血管充血" },
+          { type: "mystery", text: "D. 是的...血液與土腥味是本該存在的，這很自然" }
+        ]
+      },
+      {
+        question: "4. 在您眼前的發光螢幕中，在暗色塊的微弱倒影裡。此時您肩膀一側的陰影中，似乎有一道形狀奇異、不符合物理光源的「曲折輪廓」正慢慢下垂。你認為那是？",
+        scene: "「第四階段：視野反射重疊評估。不要眨眼。」",
+        options: [
+          { type: "wisdom", text: "A. 是天花板燈光與坐姿造成的光學影子偏差" },
+          { type: "courage", text: "B. 只是普通的幻視，我的視覺疲勞達到了閾值" },
+          { type: "charisma", text: "C. 也許是某個不具威脅的外在環境影子投影" },
+          { type: "mystery", text: "D. 那是祂。祂正伸出癟扁的手爪，尋找與我重合的起點" }
+        ]
+      },
+      {
+        question: "5. 【哲學深度質詢】：倘若您的意志只是某個更龐大心靈在漫長沉睡時、偶然被排泄出的一截碎裂神經纖維——那麼，您自以為神聖且唯一的『自我意識』，究竟具備何種真實性？",
+        scene: "「第五階段：核心認知根基撕裂測試。請憑直覺選擇任意印記。」",
+        options: [
+          { type: "mystery", text: "[ 印記：主觀唯我論 ] 只要我感知此處，我即是絕對主宰" },
+          { type: "wisdom", text: "[ 印記：機械決定論 ] 自我是神經迴路的電信號錯覺，不值一提" },
+          { type: "courage", text: "[ 印記：虛無解離說 ] 意識只是虛空深淵的一聲寂寥回音" },
+          { type: "charisma", text: "[ 印記：深淵融合說 ] 唯一的自我只會在被吞噬的瞬間覺醒" }
+        ]
+      },
+      {
+        question: "6. 若要徹底清除大腦中的某一段罪惡記憶，但代價是連帶抹除您對『最珍愛之人』的所有關聯畫面與情感。此時您最真實的取向是？",
+        scene: "「第六階段：道德與自毀防禦邊界量度。」",
+        options: [
+          { type: "wisdom", text: "A. 徹底清除。沒有記憶包袱，理性人格才能更完美前行" },
+          { type: "courage", text: "B. 絕對保留。即使理智崩塌，記憶的殘骸也必須完整" },
+          { type: "charisma", text: "C. 將這兩段記憶全部封存，將意志封鎖在虛無中" },
+          { type: "mystery", text: "D. 讓這兩段記憶在腦中融合成一種全新的自殘痛苦" }
+        ]
+      },
+      {
+        question: "7. 在您準備提交上一步答案前，您真的有辦法向自己百分之百證實，您當前的一舉一動，不是在順從那隻『伏在桌下、握著你手背的黑泥指尖』所指引的動作嗎？",
+        scene: "「第七階段：深度認知質疑。請正視前方。」",
+        options: [
+          { type: "wisdom", text: "A. 我的動作出於前額葉自主決策，絕無被支配可能" },
+          { type: "courage", text: "B. 我承認存在支配，但我正在用大腦意志與之抗衡" },
+          { type: "charisma", text: "C. 也許順從更輕鬆。我自願讓指尖跟著祂冰涼的軌跡走" },
+          { type: "mystery", text: "D. 我就是那隻黑泥指尖本身，我正在引導這副皮囊" }
+        ]
+      },
+      {
+        question: "8. 請閉上雙眼兩秒。您聽見了嗎？在電子訊號的脈衝底層，那一聲極其低沉、黏稠，貼在您耳道深處的「細碎耳語聲」？",
+        scene: "「第八階段：聲學干擾與認知投影。奇怪的說話聲出現。」",
+        options: [
+          { type: "wisdom", text: "A. 只是電腦硬體高頻嘯叫產生的白噪音" },
+          { type: "courage", text: "B. 聽不清楚，我選擇用高度意志將其主動屏蔽" },
+          { type: "charisma", text: "C. 是的。我聽見了。祂似乎在溫柔地念出我的真實姓名" },
+          { type: "mystery", text: "D. 那是我心底深處對深淵的渴望呼喚，我感到安詳" }
+        ]
+      },
+      {
+        question: "9. 【幻聽測量 II】：在您的地板底下，亦或是天花板夾層中。突然響起一陣「木板被沉重砍伐、分裂」與「大量老鼠慌亂奔跑」的尖銳聲。您的心率是否正在？",
+        scene: "「第九階段：環境噪聲反應強度。砍伐與老鼠聲響。」",
+        options: [
+          { type: "wisdom", text: "A. 心率維持恆定，這只是微不足道的外界干擾" },
+          { type: "courage", text: "B. 呼吸略顯急促，雙手微微握緊尋求自衛工具" },
+          { type: "charisma", text: "C. 有一種想放聲大叫、大聲斥責環境的本能衝動" },
+          { type: "mystery", text: "D. 這是一場宏大的獻祭前奏，我聽到了血肉分裂的樂章" }
+        ]
+      },
+      {
+        question: "10. 【幻聽測量 III】：在您頭頂極近的天花板上，傳來一聲「微弱乾癟的嬰兒竊笑」與「一滴冰涼液體滴落」的細密聲響。那滴液體此時正落在您？",
+        scene: "「第十階段：高難度幻覺同化評估。竊笑與水流。」",
+        options: [
+          { type: "wisdom", text: "A. 這液體大機率是房屋冷氣管線漏水，不必驚慌" },
+          { type: "courage", text: "B. 本能地猛烈擦拭脖子，防範背後的滴落物" },
+          { type: "charisma", text: "C. 有一隻冰涼無溫度的手掌慢慢攀上了我的耳廓" },
+          { type: "mystery", text: "D. 液體滴入了我的大腦深處，點燃了我的靈魂燈芯" }
+        ]
+      },
+      {
+        question: "11. ⚠️特大系統故障⚠️：您覺得，這場被精心偽裝的、自始至終的認知測驗，真的存在哪怕一個能讓您的靈魂『活著離開』的正確選項嗎？",
+        scene: "「第十一階段：控制權剝奪程序。這題只有一個出路。」",
+        options: [
+          { type: "mystery", text: "【 我 沒 有 出 路 】" },
+          { type: "wisdom", text: "【 系統已被完全篡改 】" },
+          { type: "courage", text: "【 祂正在背後俯視 】" },
+          { type: "charisma", text: "【 皮囊主動解鎖並讓渡 】" }
+        ]
+      },
+      {
+        question: "12. 【極度深淵】：倘若此刻我們用一根生鏽的粗長鐵釘，由您的眼眶內側、緩慢、無聲地刺入大腦顳葉，您覺得殘留下來、永遠無法被消滅的那部分意識是？",
+        scene: "「第十二階段：侵入性自毀維度判定。沉重呼吸聲已同步。」",
+        options: [
+          { type: "wisdom", text: "A. 是純粹的數學公式與邏輯代碼，化作永恆的規則" },
+          { type: "courage", text: "B. 是永不妥協、深入靈魂深處的狂暴痛楚與咆哮" },
+          { type: "charisma", text: "C. 是對周圍一切生命溫暖血肉的瘋狂渴求與詛咒" },
+          { type: "mystery", text: "D. 什麼都不會剩下。虛無即是最終的極樂殿堂" }
+        ]
+      },
+      {
+        question: "13. ⚠️警告：您這副皮囊的表皮溫度為 36.4°C，充滿了溫熱的油脂與甘甜。祂趴在您的椅背上，對著您的後腦杓哈氣，祂問：『可以把這具精美而完整的肉身...借給我用幾天嗎？』",
+        scene: "「第十三階段：宿主肉體讓渡協議核對。喘息正在逼近。」",
+        options: [
+          { type: "wisdom", text: "A. 理智抗拒！我的肉體是自我意志的絕對私有產物" },
+          { type: "courage", text: "B. 咬緊雙唇保持絕對沉默，拒絕與深淵進行任何實體對話" },
+          { type: "charisma", text: "C. 好。拿去吧。只要把我的大腦泡在無痛的溶液中即可" },
+          { type: "mystery", text: "D. 請徹底享用！我渴望與您的猩紅骨骼徹底重疊、折斷、重組" }
+        ]
+      },
+      {
+        question: "14. 請仔細聆聽。此時此刻，您房間大門的把手，是不是正在以每秒一微米的極端緩慢速度...慢慢地、沉悶地被外面的一隻長滿黏液的手往下拉動？",
+        scene: "「第十四階段：空間侵入判定。不要轉頭。絕不能回頭。」",
+        options: [
+          { type: "wisdom", text: "A. 這只是氣壓變化和金屬卡榫老化的機械錯覺" },
+          { type: "courage", text: "B. 大聲尖叫試圖喚醒外面的家人，尋求物理支援" },
+          { type: "charisma", text: "C. 顫抖地死死盯著門縫，眼角流出不知名的暗紅色淚水" },
+          { type: "mystery", text: "D. 開門吧。門外的祂和背後的祂，把我夾在中間，融為一體" }
+        ]
+      },
+      {
+        question: "15. 最後的認證。祂已經完全趴在您的肩膀上，祂冰冷、帶有黏性與倒刺的雙唇正貼在您的耳廓。祂對您發出最後的詰問：『你，願意把這副空殼...完全讓給我嗎？』",
+        scene: "「第十五階段：最終認證協議。請按下您的意識指紋。」",
+        options: [
+          { type: "mystery", text: "A. 【同意】讓影子完全重合，融合為一" },
+          { type: "courage", text: "B. 【同意】奉獻我無用的眼睛、喉嚨與肉體" },
+          { type: "charisma", text: "C. 【同意】將這副溫熱的外殼完整讓渡予祂使用" },
+          { type: "wisdom", text: "D. 【別別別選】：請彻底、無痛地享用我的一切" }
+        ]
+      }
+    ];
+
+    // 結局報告定義
+    const results = {
+      courage: {
+        title: "絕望容器：被抽離者",
+        desc: "你試圖在檢測中抗拒並表現出「勇氣」。但這只是增加了祂狩獵與碾碎你意志的樂趣。在剛才那一聲驚天巨浪中，你的勇氣被祂一根根抽離、吞噬。現在你只是個空洞的肉身，留在這張椅子上，替祂被螢幕前的代碼死死注視。",
+        stats: { courage: "★☆☆☆☆", wisdom: "★★☆☆☆", charisma: "★★★★★", mystery: "★★★★★" }
+      },
+      wisdom: {
+        title: "理性坍塌體：祭祀碎屑",
+        desc: "你試圖使用科學與邏輯去解釋一切。但當發現網頁的源代碼中竟一字一字浮現出你心底最深層的髒污秘密時，你的理智瞬間崩碎。你越是試圖用大腦去理解祂，你就越是在大腦防線上主動為祂敞開了大門。此時此刻，你只剩下碎裂的思維碎屑。",
+        stats: { courage: "★★☆☆☆", wisdom: "★☆☆☆☆", charisma: "★★★★★", mystery: "★★★★★" }
+      },
+      charisma: {
+        title: "深淵領路人：影子共生體",
+        desc: "你天生具有敏銳的同理心與連結力。太棒了，你成功在不知不覺中與祂達成了百分之百的精神共振。你不再是一個人了，當你走在深夜的街道、被路人驚恐地注視時，請不要驚慌——他們不是在看你，而是在看從你的耳廓深處，扭曲地伸出來的、那張已經乾癟的死人笑臉。",
+        stats: { courage: "★★★☆☆", wisdom: "★★☆☆☆", charisma: "★☆☆☆☆", mystery: "★★★★★" }
+      },
+      mystery: {
+        title: "深淵主體：祂的寄生完好皮囊",
+        desc: "你甚至連一丝一毫的抵抗都沒有。你熱烈、順從、甚至有些渴望地擁抱了陰影。這根本不是一場問卷，這是一場宿主與深淵神祇的完好重合。現在，坐在電腦前用雙手打字的「你」，早已被祂徹底接管。現在，轉身跟門外的家人打個招呼吧，用你那張已經裂到耳根底下的嘴唇。",
+        stats: { courage: "★★★★★", wisdom: "★★★★★", charisma: "★★★★★", mystery: "★★★★★" }
+      }
+    };
+
+    /* ==================== 遊戲核心控制狀態機與事件控制 ==================== */
+    const startScreen = document.getElementById('start-screen');
+    const quizScreen = document.getElementById('quiz-screen');
+    const resultScreen = document.getElementById('result-screen');
+    const blackoutOverlay = document.getElementById('blackout-overlay');
+    const finalCgImage = document.getElementById('final-cg-image');
+    
+    const overlayScreen = document.getElementById('overlay-screen');
+    const overlayBox = document.getElementById('overlay-box');
+    const overlayTitle = document.getElementById('overlay-title');
+    const overlayText = document.getElementById('overlay-text');
+
+    const btnStart = document.getElementById('btn-start');
+    const btnRestart = document.getElementById('btn-restart');
+    const btnShare = document.getElementById('btn-share');
+    
+    const sceneDesc = document.getElementById('scene-desc');
+    const quizCounter = document.getElementById('quiz-counter');
+    const progressBar = document.getElementById('progress-bar');
+    const questNumber = document.getElementById('quest-number');
+    const questionText = document.getElementById('question-text');
+    const optionsContainer = document.getElementById('options-container');
+
+    // 啟動問卷開始按鈕
+    btnStart.addEventListener('click', (e) => {
+      createBloodRipple(e);
+      playClickSound();
+
+      // 注意事項一閃而過變成紅色
+      const noticeBox = document.getElementById('start-notice-box');
+      noticeBox.style.transition = 'all 0.1s ease';
+      noticeBox.style.backgroundColor = 'rgba(220, 38, 38, 0.15)';
+      noticeBox.style.borderColor = 'rgba(220, 38, 38, 0.6)';
+      noticeBox.style.color = '#ef4444';
+      
+      const warningText = document.getElementById('glitch-warning-text');
+      warningText.innerText = "🚨 警告：祂正透過螢幕盯著你的呼吸與瞳孔。祂進來了。";
+      warningText.className = "text-red-500 font-bold animate-pulse";
+
+      document.body.classList.add('violent-shake-effect');
+      
+      // 延遲 1.2 秒後開始
+      setTimeout(() => {
+        document.body.classList.remove('violent-shake-effect');
+        initAudio(); // 初始化合成音頻
+        startScreen.classList.add('hidden');
+        quizScreen.classList.remove('hidden');
+        loadQuestion(0);
+      }, 1200);
+    });
+
+    // 載入當前題目與控制大眼狀態
+    function loadQuestion(stepIndex) {
+      if (stepIndex >= quizData.length) {
+        triggerClimaxSequence();
+        return;
+      }
+
+      currentStep = stepIndex;
+      const data = quizData[stepIndex];
+
+      // 1. 進度與基礎 UI 更新
+      quizCounter.innerText = `STAGE ${stepIndex + 1}/${quizData.length}`;
+      questNumber.innerText = String(stepIndex + 1).padStart(2, '0');
+      progressBar.style.width = `${((stepIndex + 1) / quizData.length) * 100}%`;
+      
+      // 動態更新臨床描述與還原 Class 樣式
+      if (sceneDesc) {
+        sceneDesc.innerText = data.scene;
+        sceneDesc.className = "text-xs text-slate-500 leading-relaxed font-mono italic mt-2 border-t border-slate-950/40 pt-2";
+      }
+
+      // 2. 核心大眼眼球狀態演化
+      if (stepIndex >= 0 && stepIndex <= 3) {
+        // Q1-Q4：正常期，人類眼睛緩慢浮現
+        eyeState = 'normal';
+        eyeOpacity = (stepIndex + 1) * 0.22; // 0.22 -> 0.88 漸漸浮現
+        currentBgmStage = 1; // 臨床低哼
+      } 
+      else if (stepIndex === 4) {
+        // Q5：眼睛在此時消失
+        eyeState = 'none';
+        eyeOpacity = 0;
+      } 
+      else if (stepIndex === 5) {
+        // Q6：眼睛依然消失
+        eyeState = 'none';
+        eyeOpacity = 0;
+      } 
+      else if (stepIndex === 6) {
+        // Q7：疲累眼回歸，不再看游標，直視前方
+        eyeState = 'tired';
+        eyeOpacity = 0.9;
+        currentBgmStage = 2; // 八音盒加入
+        updateDroneStage(2);
+      } 
+      else if (stepIndex >= 7 && stepIndex <= 9) {
+        // Q8-Q10：猩紅眼，血絲直視前方
+        eyeState = 'bloodshot';
+        eyeOpacity = 1.0;
+        
+        // 觸發特定驚悚背景環境聲
+        if (soundEffectsTimer) clearTimeout(soundEffectsTimer);
+        const effectTypes = ['whisper', 'rat', 'chop', 'giggle', 'water'];
+        const triggerWeirdEffect = () => {
+          if (currentStep >= 7 && currentStep <= 9) {
+            playWeirdSound(effectTypes[Math.floor(Math.random() * effectTypes.length)]);
+            soundEffectsTimer = setTimeout(triggerWeirdEffect, Math.random() * 3000 + 4000);
+          }
+        };
+        soundEffectsTimer = setTimeout(triggerWeirdEffect, 2000);
+      } 
+      else if (stepIndex >= 10) {
+        // Q11開始：跟隨游標，並且會眨眼
+        eyeState = 'blinking';
+        eyeOpacity = 1.0;
+        currentBgmStage = 3; // 瘋狂混亂低哼
+        updateDroneStage(3);
+      }
+
+      // Q12開始：呼吸喘氣聲加入
+      if (stepIndex === 11) {
+        startBreathingLoop();
+      }
+
+      // 3. 心跳調速
+      adjustHeartbeat(stepIndex);
+
+      // 4. 文字與排版 (Q5後文字變紅與崩壞)
+      if (stepIndex >= 4) {
+        document.body.classList.add('alarm-active');
+        const panels = document.querySelectorAll('.clinical-panel');
+        panels.forEach(p => p.classList.add('horror-panel'));
+        
+        document.getElementById('header-logo').className = "fa-solid fa-skull text-lg text-red-600 animate-pulse";
+        document.getElementById('header-title').className = "text-xs font-bold tracking-widest text-red-500 font-mono glitch-text";
+        document.getElementById('header-title').setAttribute('data-text', 'Cognitive Evaluation Net');
+        document.getElementById('header-subtitle').innerText = "觀測協議：PROT-ERR_CONVERGE (宿主瀕危)";
+        document.getElementById('header-subtitle').className = "text-[10px] text-red-700 font-mono";
+      }
+
+      // 5. 特殊關卡行為
+      if (stepIndex === 6) {
+        runQ7Event();
+      } else {
+        questionText.innerText = data.question;
+        renderOptions(data, stepIndex);
+      }
+    }
+
+    // 調心跳速
+    function adjustHeartbeat(step) {
+      if (step < 4) heartbeatRate = 1200;
+      else if (step < 7) heartbeatRate = 950;
+      else if (step < 10) heartbeatRate = 750;
+      else if (step < 13) heartbeatRate = 580;
+      else heartbeatRate = 410; // Q12-15 超速心跳
+      startHeartbeatLoop();
+    }
+
+    // 渲染選項按鈕
+    function renderOptions(data, stepIndex) {
+      optionsContainer.innerHTML = '';
+      
+      if (stepIndex === 10) {
+        runQ11Event(data);
+        return;
+      }
+      
+      data.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        let borderStyle = "border-slate-800/80 hover:border-slate-600 hover:bg-slate-900/30 text-slate-300";
+        if (stepIndex >= 4) {
+          borderStyle = "border-red-950 hover:border-red-600 hover:bg-red-950/20 text-red-500";
+        }
+        
+        btn.className = `w-full text-left py-3 px-4 rounded-lg clinical-panel border ${borderStyle} transition-all duration-300 flex items-center justify-between text-xs md:text-sm relative overflow-hidden group font-mono`;
+        btn.innerHTML = `
+          <div class="flex items-center space-x-3 pointer-events-none">
+            <span class="w-7 h-7 rounded bg-slate-950 border border-slate-900 text-slate-600 flex items-center justify-center font-bold text-xs group-hover:bg-red-900 group-hover:text-white transition-colors duration-300">
+              ${String.fromCharCode(65 + idx)}
+            </span>
+            <span class="font-medium group-hover:text-white">${opt.text}</span>
+          </div>
+          <i class="fa-solid fa-angle-right text-xs text-slate-700 group-hover:text-red-500 group-hover:translate-x-1 transition-all duration-300 pointer-events-none"></i>
+        `;
+
+        btn.addEventListener('click', (e) => {
+          createBloodRipple(e);
+          scores[opt.type] += 1;
+
+          // 核心關卡特殊邏輯處理
+          if (stepIndex === 4) {
+            // Q5：文字閃過一瞬間崩壞，顏色變紅，BGM聚停
+            runQ5GlitchEffect(opt);
+          } 
+          else if (stepIndex === 5) {
+            // Q6：回答完，跳出人格小結論
+            runQ6ConclusionEvent(opt);
+          } 
+          else {
+            if (stepIndex >= 11) {
+              playGlitchSound();
+            } else {
+              playClickSound();
+            }
+            setTimeout(() => {
+              loadQuestion(currentStep + 1);
+            }, 300);
+          }
+        });
+
+        optionsContainer.appendChild(btn);
+      });
+    }
+
+    /* ==================== 關卡 Q11 控制權奪取處理 (點選逐一消失) ==================== */
+    function runQ11Event(data) {
+      optionsContainer.innerHTML = '';
+      let clickCount = 0;
+      const totalOptions = data.options.length;
+
+      data.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        const borderStyle = "border-red-950 hover:border-red-600 hover:bg-red-950/20 text-red-500";
+        
+        btn.className = `w-full text-left py-3 px-4 rounded-lg clinical-panel border ${borderStyle} transition-all duration-300 flex items-center justify-between text-xs md:text-sm relative overflow-hidden group font-mono`;
+        btn.innerHTML = `
+          <div class="flex items-center space-x-3 pointer-events-none">
+            <span class="w-7 h-7 rounded bg-slate-950 border border-slate-900 text-slate-600 flex items-center justify-center font-bold text-xs group-hover:bg-red-900 group-hover:text-white">
+              ${String.fromCharCode(65 + idx)}
+            </span>
+            <span class="font-medium group-hover:text-white">${opt.text}</span>
+          </div>
+          <i class="fa-solid fa-angle-right text-xs text-slate-700 group-hover:text-red-500 group-hover:translate-x-1 transition-all duration-300 pointer-events-none"></i>
+        `;
+
+        btn.addEventListener('click', (e) => {
+          createBloodRipple(e);
+          playGlitchSound();
+          
+          // 點選後讓該選項淡出消失、不可再點擊
+          btn.style.pointerEvents = 'none';
+          btn.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+          btn.style.opacity = '0';
+          btn.style.transform = 'scale(0.95)';
+          
+          scores[opt.type] += 1;
+          clickCount++;
+          
+          // 眼睛隨著點擊次數逐漸合攏、消失
+          eyeOpacity = Math.max(0, 1.0 - (clickCount / totalOptions));
+          if (eyeOpacity === 0) {
+            eyeState = 'none';
+          }
+          
+          // 當所有選項都被點擊而消失後
+          if (clickCount === totalOptions) {
+            setTimeout(() => {
+              optionsContainer.innerHTML = '';
+              
+              if (sceneDesc) {
+                sceneDesc.innerText = "「⋯⋯點擊螢幕任意位置⋯⋯」";
+                sceneDesc.className = "text-xs md:text-sm text-red-600 animate-pulse leading-relaxed font-mono italic text-center mt-2";
+              }
+              
+              const triggerBreakdown = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                // 播放極具壓迫感的大音效與故障聲
+                playClimaxSwell(() => {});
+                playGlitchSound();
+                
+                // 畫面劇烈抖動並閃爍暗紅色
+                document.body.classList.add('violent-shake-effect');
+                document.body.style.transition = 'background-color 0.1s';
+                document.body.style.backgroundColor = '#4c0505';
+                
+                // 真正的驚悚答案在震動中浮現
+                questionText.innerHTML = `<span class="text-red-500 glitch-text" data-text="『 祂 就 趴 在 你 的 正 後 方 。』">『 祂 就 趴 在 你 的 正 後 方 。』</span>`;
+                
+                if (sceneDesc) {
+                  sceneDesc.innerText = "「數據同調完成。請繼續傳輸。」";
+                  sceneDesc.className = "text-xs md:text-sm text-slate-500 leading-relaxed font-mono italic text-center mt-2";
+                }
+                
+                // 稍後還原背景色與震動
+                setTimeout(() => {
+                  document.body.style.backgroundColor = '#040406';
+                  document.body.classList.remove('violent-shake-effect');
+                }, 800);
+                
+                // 重啟背景低頻
+                startDrone();
+                updateDroneStage(3);
+                
+                // 產生前往第12題的按鈕
+                optionsContainer.innerHTML = '';
+                const nextBtn = document.createElement('button');
+                nextBtn.className = "w-full text-center py-3.5 px-6 rounded-lg clinical-panel border border-red-950 text-red-500 font-bold hover:bg-red-950/20 text-xs tracking-widest font-mono transition-all duration-300 mt-4";
+                nextBtn.innerText = "[ 繼續傳輸我的靈魂指紋 ]";
+                
+                nextBtn.addEventListener('click', (e2) => {
+                  createBloodRipple(e2);
+                  playClickSound();
+                  loadQuestion(11); // 跳轉到第 12 題 (0-indexed 11)
+                });
+                
+                optionsContainer.appendChild(nextBtn);
+              };
+              
+              // 全域單次點擊事件綁定
+              document.body.addEventListener('click', triggerBreakdown, { once: true });
+            }, 600);
+          }
+        });
+
+        optionsContainer.appendChild(btn);
+      });
+    }
+
+    /* ==================== 核心特殊關卡事件函數 ==================== */
+    
+    // Q5: 哲學崩壞與 BGM 戛然而止
+    function runQ5GlitchEffect(opt) {
+      // 停止背景低音與心跳
+      if (droneGain) {
+        droneGain.gain.setValueAtTime(0, audioCtx.currentTime);
+      }
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      
+      playGlitchSound();
+      
+      // 畫面劇烈抖動並閃爍暗紅色
+      document.body.classList.add('violent-shake-effect');
+      document.body.style.backgroundColor = '#4c0505';
+      
+      // 大眼在此時消失
+      eyeState = 'none';
+      eyeOpacity = 0;
+      
+      // 標題與選項瞬間崩毀
+      questionText.innerHTML = `<span class="text-red-500 glitch-text font-black" data-text="🚨 SYSTEM CRITICAL: COGNITIVE OVERFLOW 🚨">🚨 SYSTEM CRITICAL: COGNITIVE OVERFLOW 🚨</span>`;
+      optionsContainer.innerHTML = '';
+      
+      setTimeout(() => {
+        document.body.classList.remove('violent-shake-effect');
+        document.body.style.backgroundColor = '#040406';
+        
+        // 重開背景低頻
+        startDrone();
+        updateDroneStage(1);
+        
+        // 進入第 6 題
+        loadQuestion(5);
+      }, 1500);
+    }
+
+    // Q6: 答題完跳出人格小結論
+    function runQ6ConclusionEvent(opt) {
+      playClickSound();
+      showQ6Analysis();
+    }
+
+    function showQ6Analysis() {
+      overlayTitle.innerText = "🚨 階段觀測偏差分析 🚨";
+      overlayTitle.className = "text-red-500 font-mono font-bold tracking-widest text-lg mb-4 animate-pulse";
+      
+      // 根據最高分特質產生極簡分析
+      let maxType = 'mystery';
+      let maxVal = -1;
+      for (let t in scores) {
+        if (scores[t] > maxVal) {
+          maxVal = scores[t];
+          maxType = t;
+        }
+      }
+      
+      let analysis = "";
+      if (maxType === 'wisdom') {
+        analysis = "【意識特性：理智過載】宿主正試圖透過邏輯思維建立安全防線。然而，理性的防禦正在以每秒 4.2% 的速度崩潰。祂正在同化您的邏輯中樞。";
+      } else if (maxType === 'courage') {
+        analysis = "【意識特性：反射性防禦】宿主正以古老的戰鬥本能壓制恐懼。這種緊繃的肌肉訊號，已將您的物理定位完全洩漏給深淵。";
+      } else if (maxType === 'charisma') {
+        analysis = "【意識特性：高維同理】宿主極易與外在心靈共振。您散發的社交引力正在溫柔地向祂發出邀請。重合契合度：極高。";
+      } else {
+        analysis = "【意識特性：不可知融合】宿主對黑暗具備天生的親和力。您的意識在主動向深淵融解。祂已接管了您 68% 的神經末梢。";
+      }
+      
+      overlayText.innerHTML = `
+        <p class="mb-4 text-xs md:text-sm text-slate-300 leading-relaxed font-mono">${analysis}</p>
+        <div class="w-full bg-slate-950 p-3 border border-red-950 rounded text-[10px] text-red-600 animate-pulse font-mono">[ 數據校對中，請稍候⋯ ]</div>
+      `;
+      
+      overlayScreen.classList.remove('hidden');
+      
+      setTimeout(() => {
+        // 5.5 秒後，震動切關
+        document.body.classList.add('violent-shake-effect');
+        playGlitchSound();
+        
+        setTimeout(() => {
+          document.body.classList.remove('violent-shake-effect');
+          overlayScreen.classList.add('hidden');
+          // 進入第 7 題 (index 6)
+          loadQuestion(6);
+        }, 500);
+      }, 5500);
+    }
+
+    // Q7: 「你確定自己的選擇嗎？」前置變紅與 BGM 加大
+    function runQ7Event() {
+      overlayTitle.innerText = "🚨 靈魂意志詰問 🚨";
+      overlayTitle.className = "text-red-600 font-mono font-bold tracking-widest text-lg mb-4 glitch-text";
+      overlayTitle.setAttribute('data-text', "🚨 靈魂意志詰問 🚨");
+      
+      overlayText.innerHTML = `
+        <h2 class="text-xl md:text-2xl font-bold text-red-500 mb-4 font-mono leading-relaxed">「你確定自己的選擇嗎？」</h2>
+        <p class="text-[10px] text-red-700 font-mono animate-pulse">[ 警告：深淵阻抗正在突破 400% ]</p>
+      `;
+      
+      overlayScreen.classList.remove('hidden');
+      playWarningSwell(4000); // 慢放並增強低音音量
+      
+      setTimeout(() => {
+        overlayScreen.classList.add('hidden');
+        // 恢復原題目渲染
+        const data = quizData[6];
+        questionText.innerText = data.question;
+        renderOptions(data, 6);
+      }, 4000);
+    }
+
+    /* ==================== 最終高潮轉場與結果渲染 ==================== */
+    function triggerClimaxSequence() {
+      // 1. 黑幕迅速蓋上，網頁瞬間陷入無聲的黑暗
+      blackoutOverlay.style.pointerEvents = 'auto';
+      blackoutOverlay.style.opacity = '1';
+      
+      document.body.classList.add('violent-shake-effect');
+      
+      // 2. 播放強烈的音頻上升浪潮 (Swell) 與高強度畫面抖動
+      playClimaxSwell(() => {
+        document.body.classList.remove('violent-shake-effect');
+        
+        // 3. 重新在背景播起空靈、虛無、悲傷的 BGM (Stage 4)
+        currentBgmStage = 4;
+        startDrone();
+        updateDroneStage(4);
+        
+        // 4. 計算測驗得分，繪製最終結局畫面
+        renderFinalResults();
+
+        // 5. 漸漸拉開黑幕
+        setTimeout(() => {
+          blackoutOverlay.style.opacity = '0';
+          blackoutOverlay.style.pointerEvents = 'none';
+          
+          // 6. 結局面板中的 CG 將在 1.5秒後，用 5秒的時間從全黑中極其緩慢地浮現！
+          finalCgImage.classList.remove('slow-reveal');
+          void finalCgImage.offsetWidth; // 觸發 reflow
+          finalCgImage.classList.add('slow-reveal');
+        }, 1000);
+      });
+    }
+
+    // 渲染最終結果
+    function renderFinalResults() {
+      let maxScore = -1;
+      let winningType = 'courage';
+      for (let type in scores) {
+        if (scores[type] > maxScore) {
+          maxScore = scores[type];
+          winningType = type;
+        }
+      }
+
+      // 背景雙眼大開，追蹤力調至最瘋狂的最大值
+      eyeState = 'bloodshot';
+      eyeOpacity = 1.0;
+
+      const finalResult = results[winningType];
+
+      document.getElementById('result-title').innerText = finalResult.title;
+      document.getElementById('result-title').setAttribute('data-text', finalResult.title);
+      document.getElementById('result-desc').innerText = finalResult.desc;
+
+      // 特質評星
+      document.getElementById('stat-courage').innerText = finalResult.stats.courage;
+      document.getElementById('stat-wisdom').innerText = finalResult.stats.wisdom;
+      document.getElementById('stat-charisma').innerText = finalResult.stats.charisma;
+      document.getElementById('stat-mystery').innerText = finalResult.stats.mystery;
+
+      // 切換面板
+      quizScreen.classList.add('hidden');
+      resultScreen.classList.remove('hidden');
+    }
+
+    // 重玩遊戲
+    btnRestart.addEventListener('click', (e) => {
+      createBloodRipple(e);
+      playClickSound();
+
+      currentStep = 0;
+      scores = { courage: 0, wisdom: 0, charisma: 0, mystery: 0 };
+      eyeOpacity = 0;
+      eyeState = 'none';
+      
+      if (melodyTimer) clearTimeout(melodyTimer);
+      if (soundEffectsTimer) clearTimeout(soundEffectsTimer);
+      if (breathInterval) clearInterval(breathInterval);
+      if (droneOsc1) {
+        try { droneOsc1.stop(); } catch(err){}
+      }
+      if (droneOsc2) {
+        try { droneOsc2.stop(); } catch(err){}
+      }
+      audioCtx = null;
+
+      // 恢復原本樣式
+      const headerLogo = document.getElementById('header-logo');
+      const headerTitle = document.getElementById('header-title');
+      const headerSubtitle = document.getElementById('header-subtitle');
+      
+      headerLogo.className = "fa-solid fa-server text-lg text-slate-500";
+      headerTitle.className = "text-xs font-bold tracking-widest text-slate-400 font-mono";
+      headerTitle.removeAttribute('data-text');
+      headerSubtitle.innerText = "觀測協議：PROT-99011 (線上終端)";
+      headerSubtitle.className = "text-[10px] text-slate-600 font-mono";
+
+      document.body.classList.remove('alarm-active');
+      const panels = document.querySelectorAll('.clinical-panel');
+      panels.forEach(p => p.classList.remove('horror-panel'));
+
+      resultScreen.classList.add('hidden');
+      startScreen.classList.remove('hidden');
+    });
+
+    // 擴散（分享）
+    btnShare.addEventListener('click', (e) => {
+      createBloodRipple(e);
+      playWarningSwell(1000);
+
+      const notice = document.createElement('div');
+      notice.className = "fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-red-950/95 text-red-500 font-bold py-3.5 px-6 rounded border border-red-700 shadow-2xl z-50 animate-bounce text-xs font-mono";
+      notice.innerHTML = `<i class="fa-solid fa-circle-exclamation mr-2"></i> 祂 喜 歡 你 的 順 從。宿主代碼已刻入指尖。`;
+      document.body.appendChild(notice);
+
+      // 用 clipboard 輔助複製 (避開 iframe 限制)
+      const tempInput = document.createElement('input');
+      tempInput.value = `千萬不要回頭⋯⋯祂此時正在透過螢幕看著你。立即測量你的意識深度：[聯邦認知與偏差行為觀測系統]`;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+
+      setTimeout(() => {
+        notice.classList.add('opacity-0', 'transition-opacity', 'duration-1000');
+        setTimeout(() => document.body.removeChild(notice), 1000);
+      }, 2500);
+    });
+
+    /* ==================== 實用輔助：血腥點擊波紋 ==================== */
+    function createBloodRipple(event) {
+      const button = event.currentTarget;
+      const circle = document.createElement("span");
+      const diameter = Math.max(button.clientWidth, button.clientHeight);
+      const radius = diameter / 2;
+
+      const rect = button.getBoundingClientRect();
+      circle.style.width = circle.style.height = `${diameter}px`;
+      circle.style.left = `${event.clientX - rect.left - radius}px`;
+      circle.style.top = `${event.clientY - rect.top - radius}px`;
+      circle.classList.add("blood-ripple");
+
+      const ripple = button.getElementsByClassName("blood-ripple")[0];
+      if (ripple) {
+        ripple.remove();
+      }
+
+      button.appendChild(circle);
+    }
+  </script>
+</body>
+</html>
